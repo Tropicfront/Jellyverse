@@ -10,11 +10,16 @@ services:
       - INTERVALLE_MINUTES=15
       - "PREFIXE_COLLECTION=🌌 "
       - PORT_WEB=8099                          # sert le bouton de l'interface
+      # Univers officiels publiés sur GitHub (laisser vide pour désactiver)
+      - GITHUB_DEPOT=tropicfront/jellyverse    # à adapter : compte/dépôt
+      - GITHUB_BRANCHE=main
+      - GITHUB_CHEMIN=univers
+      # - GITHUB_TOKEN=xxxx                    # seulement si le dépôt est privé
       - TZ=Europe/Paris
     ports:
       - "8099:8099"                            # doit être joignable par ton navigateur
     volumes:
-      - ./data:/data                           # config.yml + dossier univers/
+      - /mnt/docker/jellyverse/data:/data      # tes fichiers : config.yml + univers/*.yml
     # Si Jellyfin tourne dans un autre docker-compose, décommente pour
     # rejoindre son réseau et utiliser http://jellyfin:8096 :
     # networks:

@@ -1,4 +1,4 @@
-# Jellyfin Univers (Docker)
+# Jellyverse
 
 Crée dans Jellyfin une **fiche (collection) par univers**. En cliquant dessus, la
 description affiche l'ordre de visionnage que tu as défini et ton avancement :
@@ -18,33 +18,62 @@ Progression : 31/64 — 48 %
 ## Structure
 
 ```
-jellyverse/
-├── docker-compose.yml     ← réglages de connexion
+jellyverse/                    ← dépôt GitHub
+├── docker-compose.yml         ← réglages de connexion
 ├── Dockerfile
 ├── jellyfin_univers.py
-├── web/univers.js         ← bouton + panneau injectés dans Jellyfin
 ├── requirements.txt
-└── data/                  ← monté dans le conteneur (/data)
+├── web/univers.js             ← bouton + panneau injectés dans Jellyfin
+├── univers/                   ← univers OFFICIELS (partagés via GitHub)
+│   ├── mushishi.yml           ← un fichier = une fiche
+│   └── _modele.yml.exemple
+└── data/                      ← à copier dans /mnt/docker/jellyverse/data
     ├── config.yml
-    └── univers/
-        ├── mushishi.yml   ← un fichier = une fiche
-        └── _modele.yml.exemple
+    └── univers/               ← univers LOCAUX de l'utilisateur
+        └── LISEZMOI.txt
 ```
+
+## D'où viennent les univers ?
+
+Trois sources sont lues et fusionnées :
+
+| Source     | Emplacement                                   | Mise à jour |
+|------------|-----------------------------------------------|-------------|
+| **image**  | dossier `univers/` du dépôt, copié dans l'image au `docker build` | à chaque nouvelle image |
+| **github** | dossier `univers/` du dépôt GitHub (`GITHUB_DEPOT`), téléchargé par le conteneur | toutes les `INTERVALLE_MINUTES`, sans reconstruire l'image |
+| **local**  | `/mnt/docker/jellyverse/data/univers/` sur la machine | quelques secondes après l'ajout d'un fichier |
+
+- Un univers poussé sur GitHub apparaît donc tout seul, même avec une
+  ancienne image. Si GitHub est injoignable, la dernière copie téléchargée
+  (ou celle de l'image) est utilisée.
+- **Le local est prioritaire** : un fichier local qui porte le même nom qu'un
+  univers officiel (ex. `mushishi.yml`) le remplace. Pratique pour adapter
+  un univers officiel à l'organisation de sa propre bibliothèque.
+- Les fichiers dont le nom commence par `_` sont ignorés (modèles).
+- Au démarrage, les logs indiquent la source de chaque univers :
+  `=== Mushishi  (mushishi.yml · github) ===`.
 
 ## Installation
 
 1. Dans Jellyfin : **Tableau de bord → Clés API → +**, copie la clé.
-2. Dans `docker-compose.yml`, renseigne `JELLYFIN_URL`, `JELLYFIN_API_KEY`
-   et `JELLYFIN_USER`.
+2. Crée le dossier local et copie-y le contenu de `data/` :
+   ```bash
+   sudo mkdir -p /mnt/docker/jellyverse/data/univers
+   sudo cp -r data/* /mnt/docker/jellyverse/data/
+   ```
+   (sur un NAS, tu peux choisir un autre chemin : modifie alors la ligne
+   `volumes` du `docker-compose.yml`).
+3. Dans `docker-compose.yml`, renseigne `JELLYFIN_URL`, `JELLYFIN_API_KEY`,
+   `JELLYFIN_USER` et `GITHUB_DEPOT` (ton `compte/dépôt`).
    - Jellyfin sur la même machine mais dans un autre compose : décommente la
      partie `networks` (nom du réseau visible avec `docker network ls`) et
      utilise `http://jellyfin:8096`.
    - Sinon, mets l'IP du serveur : `http://192.168.1.10:8096`.
-3. Vérifie tes fichiers sans rien modifier :
+4. Vérifie tes fichiers sans rien modifier :
    ```bash
    docker compose run --rm jellyverse --test
    ```
-4. Lance l'application :
+5. Lance l'application :
    ```bash
    docker build -t tropicfront/jellyverse .
    docker compose up -d
@@ -53,7 +82,8 @@ jellyverse/
 
 Le conteneur tourne en continu. Il met à jour les fiches toutes les
 `INTERVALLE_MINUTES` minutes, et **immédiatement** dès que tu ajoutes, modifies
-ou supprimes un `.yml` dans `data/univers/` (vérifié toutes les 10 secondes).
+ou supprimes un `.yml` dans `/mnt/docker/jellyverse/data/univers/` (vérifié
+toutes les 10 secondes).
 
 ## Bouton dans l'interface Jellyfin
 
@@ -90,7 +120,8 @@ profil voit sa propre avancée (contrairement à la description de la collection
 
 L'adresse doit être joignable **par ton navigateur** (pas seulement par
 Jellyfin) : c'est pour ça que le port `8099` est publié dans `docker-compose.yml`.
-Pour vérifier, ouvre `http://IP:8099/api/univers` dans ton navigateur.
+Pour vérifier, ouvre `http://IP:8099/api/univers` dans ton navigateur
+(chaque univers y indique sa `source`).
 
 ### Jellyfin en HTTPS (reverse proxy)
 
@@ -118,8 +149,12 @@ location /univers/ {
 
 ## Ajouter un univers
 
-Crée un fichier `.yml` dans `data/univers/` (voir `mushishi.yml` et
-`_modele.yml.exemple`). Rien à redémarrer.
+- **Pour tout le monde** : ajoute le `.yml` dans `univers/` du dépôt et pousse-le
+  sur GitHub. Chaque installation le récupère à la prochaine mise à jour.
+- **Pour toi seulement** : dépose le `.yml` dans
+  `/mnt/docker/jellyverse/data/univers/`. Rien à redémarrer.
+
+Voir `univers/mushishi.yml` et `univers/_modele.yml.exemple`.
 
 | Clé        | Exemple                          | Rôle                                  |
 |------------|----------------------------------|---------------------------------------|
@@ -145,8 +180,12 @@ Crée un fichier `.yml` dans `data/univers/` (voir `mushishi.yml` et
 | `PREFIXE_COLLECTION`  | `""`                 | préfixe du nom des collections         |
 | `DESCRIPTION_HTML`    | `true`               | `false` si des `<br>` s'affichent      |
 | `PORT_WEB`            | `8099`               | port du bouton (`0` pour le désactiver)|
+| `GITHUB_DEPOT`        | —                    | `compte/dépôt` des univers officiels (vide = désactivé) |
+| `GITHUB_BRANCHE`      | `main`               | branche à lire                         |
+| `GITHUB_CHEMIN`       | `univers`            | dossier des `.yml` dans le dépôt       |
+| `GITHUB_TOKEN`        | —                    | uniquement pour un dépôt privé         |
 
-Elles ont la priorité sur `data/config.yml`.
+Elles ont la priorité sur `/mnt/docker/jellyverse/data/config.yml`.
 
 ## Bon à savoir
 

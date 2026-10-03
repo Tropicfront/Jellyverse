@@ -207,7 +207,7 @@
     const corps = ouvrirCadre('🌌 Mes univers', false);
     await chargerDonnees();
     if (erreurDonnees) { corps.innerHTML = `<div class="jfu-msg">${esc(erreurDonnees)}</div>`; return; }
-    if (!donnees.univers.length) { corps.innerHTML = '<div class="jfu-msg">Aucun univers. Ajoute un fichier .yml dans data/univers/.</div>'; return; }
+    if (!donnees.univers.length) { corps.innerHTML = '<div class="jfu-msg">Aucun univers. Ajoute un fichier .yml dans univers/ (GitHub) ou dans /mnt/docker/jellyverse/data/univers/.</div>'; return; }
     corps.innerHTML = '<div class="jfu-liste-u"></div>';
     const liste = corps.querySelector('.jfu-liste-u');
     for (const u of donnees.univers) {

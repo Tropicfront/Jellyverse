@@ -1,0 +1,8 @@
+Dépose ici tes propres fichiers d'univers (.yml).
+
+- Ils sont détectés automatiquement en quelques secondes, sans redémarrer.
+- Un fichier qui porte le même nom qu'un univers officiel (ex. mushishi.yml)
+  le remplace : copie l'officiel ici pour le modifier à ta façon.
+- Un fichier dont le nom commence par « _ » est ignoré (modèle / désactivé).
+
+Modèle : voir univers/_modele.yml.exemple dans le dépôt GitHub.

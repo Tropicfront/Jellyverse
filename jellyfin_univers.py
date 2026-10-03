@@ -14,12 +14,14 @@ Usage :
 """
 
 import argparse
+import io
 import json
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import re
 import sys
+import tarfile
 import time
 import unicodedata
 from pathlib import Path
@@ -206,15 +208,15 @@ def barre(p, n=20):
     return "▰" * plein + "▱" * (n - plein)
 
 
-def traiter(jf, fichier, cfg, test=False):
+def traiter(jf, fichier, cfg, test=False, source="local"):
     data = yaml.safe_load(fichier.read_text(encoding="utf-8")) or {}
     nom = data.get("nom") or fichier.stem
     nom_collection = data.get("collection") or (cfg.get("prefixe_collection", "") + nom)
     etapes = data.get("etapes") or []
 
-    print(f"\n=== {nom}  ({fichier.name}) ===")
+    print(f"\n=== {nom}  ({fichier.name} · {source}) ===")
     resultats, ids_collection = [], []
-    info = {"id": fichier.stem, "nom": nom,
+    info = {"id": fichier.stem, "nom": nom, "source": source,
             "description": str(data.get("description") or "").strip(),
             "collection_id": None, "etapes": [], "membres": set()}
     for i, etape in enumerate(etapes, 1):
@@ -324,15 +326,16 @@ ETAT = {"maj": None, "univers": []}  # données servies au bouton de l'interface
 VERROU = threading.Lock()
 
 
-def executer(cfg, dossier, test):
+def executer(cfg, dossiers, test):
     jf = Jellyfin(cfg["serveur"], cfg["cle_api"], cfg["utilisateur"])
-    fichiers = sorted(list(dossier.glob("*.yml")) + list(dossier.glob("*.yaml")))
+    fichiers = lister_univers(dossiers)
     if not fichiers:
-        print(f"Aucun fichier .yml dans {dossier}")
+        print("Aucun fichier d'univers trouvé (" +
+              ", ".join(f"{src} : {d}" for src, d in dossiers) + ")")
     univers = []
-    for f in fichiers:
+    for f, source in fichiers:
         try:
-            info = traiter(jf, f, cfg, test)
+            info = traiter(jf, f, cfg, test, source)
             if info:
                 info["membres"] = sorted(info["membres"])
                 univers.append(info)
@@ -341,6 +344,78 @@ def executer(cfg, dossier, test):
     with VERROU:
         ETAT["univers"] = univers
         ETAT["maj"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+# ---------------------------------------------------------------- sources des fichiers d'univers
+#
+#   1. « image »  : dossier univers/ du dépôt, intégré dans l'image Docker au build
+#   2. « github » : dossier univers/ du dépôt GitHub, téléchargé à chaque mise à jour
+#                   (nouveaux univers disponibles sans reconstruire l'image)
+#   3. « local »  : /data/univers, les fichiers de l'utilisateur
+#
+# Un fichier portant le même nom dans une source suivante remplace le précédent :
+# l'utilisateur peut donc modifier un univers officiel en le copiant en local.
+
+def lister_univers(dossiers):
+    choisis = {}
+    for source, dossier in dossiers:
+        if not dossier or not dossier.is_dir():
+            continue
+        for f in sorted(list(dossier.glob("*.yml")) + list(dossier.glob("*.yaml"))):
+            if f.name.startswith("_"):
+                continue  # modèles / fichiers désactivés
+            choisis[f.stem.lower()] = (f, source)
+    return sorted(choisis.values(), key=lambda x: x[0].stem.lower())
+
+
+def synchroniser_github(cfg, cache):
+    """Télécharge l'archive du dépôt GitHub et en extrait les .yml du dossier d'univers.
+
+    L'archive (codeload.github.com) n'est pas soumise à la limite de 60 requêtes/heure
+    de l'API GitHub. Renvoie True si quelque chose a changé dans le cache.
+    """
+    depot = str(cfg.get("github_depot") or "").strip().strip("/")
+    if not depot:
+        return False
+    branche = cfg.get("github_branche") or "main"
+    chemin = [p for p in str(cfg.get("github_chemin") or "univers").strip("/").split("/") if p]
+    entetes = {"User-Agent": "jellyverse"}
+    if cfg.get("github_token"):  # dépôt privé : passage par l'API avec le jeton
+        entetes["Authorization"] = f"Bearer {cfg['github_token']}"
+        url = f"https://api.github.com/repos/{depot}/tarball/{branche}"
+    else:
+        url = f"https://codeload.github.com/{depot}/tar.gz/refs/heads/{branche}"
+    try:
+        r = requests.get(url, headers=entetes, timeout=60)
+        if r.status_code == 404:
+            raise RuntimeError(f"dépôt ou branche introuvable ({depot}, {branche})")
+        r.raise_for_status()
+        distants = {}
+        with tarfile.open(fileobj=io.BytesIO(r.content), mode="r:gz") as archive:
+            for membre in archive.getmembers():
+                morceaux = membre.name.split("/")[1:]  # retire « depot-branche/ »
+                if (membre.isfile() and len(morceaux) == len(chemin) + 1
+                        and morceaux[:-1] == chemin
+                        and morceaux[-1].lower().endswith((".yml", ".yaml"))):
+                    distants[morceaux[-1]] = archive.extractfile(membre).read()
+
+        cache.mkdir(parents=True, exist_ok=True)
+        change = False
+        for nom, contenu in distants.items():
+            cible = cache / nom
+            if not cible.exists() or cible.read_bytes() != contenu:
+                cible.write_bytes(contenu)
+                change = True
+        for ancien in list(cache.glob("*.yml")) + list(cache.glob("*.yaml")):
+            if ancien.name not in distants:  # supprimé du dépôt
+                ancien.unlink()
+                change = True
+        print(f"GitHub {depot}/{'/'.join(chemin)} ({branche}) : {len(distants)} fichier(s)"
+              + (" — mis à jour" if change else ""), flush=True)
+        return change
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠ GitHub : {e} — utilisation des copies déjà présentes", flush=True)
+        return False
 
 
 # ---------------------------------------------------------------- serveur web (bouton Jellyfin)
@@ -394,6 +469,11 @@ ENV = {  # variables d'environnement (Docker) -> clés de config
     "JELLYFIN_API_KEY": "cle_api",
     "JELLYFIN_USER": "utilisateur",
     "DOSSIER_UNIVERS": "dossier_univers",
+    "DOSSIER_OFFICIEL": "dossier_officiel",
+    "GITHUB_DEPOT": "github_depot",
+    "GITHUB_BRANCHE": "github_branche",
+    "GITHUB_CHEMIN": "github_chemin",
+    "GITHUB_TOKEN": "github_token",
     "PREFIXE_COLLECTION": "prefixe_collection",
     "INTERVALLE_MINUTES": "intervalle_minutes",
     "DESCRIPTION_HTML": "description_html",
@@ -417,14 +497,18 @@ def charger_config(chemin):
     return cfg
 
 
-def signature(dossier):
+def signature(dossiers):
     """Empreinte des fichiers .yml : change dès qu'un fichier est ajouté, modifié ou supprimé."""
-    fichiers = list(dossier.glob("*.yml")) + list(dossier.glob("*.yaml"))
-    return sorted((f.name, f.stat().st_mtime) for f in fichiers)
+    sig = []
+    for source, dossier in dossiers:
+        if dossier and dossier.is_dir():
+            for f in list(dossier.glob("*.yml")) + list(dossier.glob("*.yaml")):
+                sig.append((source, f.name, f.stat().st_mtime))
+    return sorted(sig)
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Fiches d'univers pour Jellyfin")
+    ap = argparse.ArgumentParser(description="Jellyverse — fiches d'univers pour Jellyfin")
     ap.add_argument("--config", default=os.environ.get("CONFIG", "config.yml"))
     ap.add_argument("--test", action="store_true", help="vérifie sans rien modifier")
     ap.add_argument("--boucle", action="store_true", help="mise à jour en continu")
@@ -432,32 +516,46 @@ def main():
 
     chemin_cfg = Path(args.config).resolve()
     cfg = charger_config(chemin_cfg)
-    dossier = Path(cfg.get("dossier_univers", "univers"))
-    if not dossier.is_absolute():
-        dossier = (chemin_cfg.parent / dossier).resolve()
-    dossier.mkdir(parents=True, exist_ok=True)
 
+    local = Path(cfg.get("dossier_univers", "univers"))
+    if not local.is_absolute():
+        local = (chemin_cfg.parent / local).resolve()
+    local.mkdir(parents=True, exist_ok=True)
+    officiel = Path(cfg.get("dossier_officiel") or Path(__file__).resolve().parent / "univers")
+    cache_github = local.parent / ".cache-github"
+
+    dossiers = [("image", officiel), ("github", cache_github), ("local", local)]
+    print("Sources des univers :", flush=True)
+    print(f"  • image  : {officiel}", flush=True)
+    if cfg.get("github_depot"):
+        print(f"  • github : {cfg['github_depot']} / {cfg.get('github_chemin') or 'univers'}", flush=True)
+    print(f"  • local  : {local}  (prioritaire en cas de même nom)", flush=True)
+
+    synchroniser_github(cfg, cache_github)
     if not args.boucle:
-        executer(cfg, dossier, args.test)
+        executer(cfg, dossiers, args.test)
         return
 
     port = int(cfg.get("port_web", 8099) or 0)
     if port:
         demarrer_serveur(port)
     intervalle = float(cfg.get("intervalle_minutes", 15)) * 60
-    print(f"Surveillance de {dossier} — mise à jour toutes les {intervalle / 60:g} min "
-          "et dès qu'un .yml change.", flush=True)
-    derniere_sig, dernier_passage = None, 0.0
+    print(f"Mise à jour toutes les {intervalle / 60:g} min et dès qu'un .yml local change.", flush=True)
+    derniere_sig, dernier_passage = None, time.time()
+    premier = True
     while True:
-        sig = signature(dossier)
-        if sig != derniere_sig or time.time() - dernier_passage >= intervalle:
-            raison = "fichiers modifiés" if derniere_sig is not None and sig != derniere_sig else "planifiée"
+        if not premier and time.time() - dernier_passage >= intervalle:
+            synchroniser_github(cfg, cache_github)
+        sig = signature(dossiers)
+        if premier or sig != derniere_sig or time.time() - dernier_passage >= intervalle:
+            raison = ("démarrage" if premier else
+                      "fichiers modifiés" if sig != derniere_sig else "planifiée")
             print(time.strftime(f"\n[%Y-%m-%d %H:%M:%S] mise à jour ({raison})"), flush=True)
             try:
-                executer(cfg, dossier, args.test)
+                executer(cfg, dossiers, args.test)
             except Exception as e:  # noqa: BLE001
                 print(f"✖ {e}", flush=True)
-            derniere_sig, dernier_passage = sig, time.time()
+            derniere_sig, dernier_passage, premier = signature(dossiers), time.time(), False
         time.sleep(10)
 
 
