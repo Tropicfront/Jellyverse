@@ -33,6 +33,19 @@ jellyverse/                    ← dépôt GitHub
         └── LISEZMOI.txt
 ```
 
+Sur la machine Docker :
+
+```
+/mnt/docker/jellyverse/
+├── data/          ← config.yml + univers/*.yml (tes fichiers)
+└── affiches/      ← créé automatiquement
+    ├── mushishi/  ← affiche + fond téléchargés, etat.json
+    └── perso/     ← tes propres affiches (facultatif) : mushishi.jpg …
+```
+
+Jellyverse n'a **pas besoin d'accéder aux dossiers de Jellyfin** : tout passe
+par l'API. Jellyfin peut être sur une autre machine.
+
 ## D'où viennent les univers ?
 
 Trois sources sont lues et fusionnées :
@@ -58,17 +71,17 @@ Trois sources sont lues et fusionnées :
 1. Dans Jellyfin : **Tableau de bord → Clés API → +**, copie la clé.
 2. Crée le dossier local et copie-y le contenu de `data/` :
    ```bash
-   sudo mkdir -p /mnt/docker/jellyverse/data/univers
+   sudo mkdir -p /mnt/docker/jellyverse/data/univers /mnt/docker/jellyverse/affiches/perso
    sudo cp -r data/* /mnt/docker/jellyverse/data/
    ```
    (sur un NAS, tu peux choisir un autre chemin : modifie alors la ligne
    `volumes` du `docker-compose.yml`).
 3. Dans `docker-compose.yml`, renseigne `JELLYFIN_URL`, `JELLYFIN_API_KEY`,
    `JELLYFIN_USER` et `GITHUB_DEPOT` (ton `compte/dépôt`).
-   - Jellyfin sur la même machine mais dans un autre compose : décommente la
-     partie `networks` (nom du réseau visible avec `docker network ls`) et
-     utilise `http://jellyfin:8096`.
-   - Sinon, mets l'IP du serveur : `http://192.168.1.10:8096`.
+   - Jellyfin sur une autre machine : mets son adresse, par exemple
+     `http://192.168.1.20:8096`.
+   - Jellyfin sur la même machine dans un autre compose : tu peux aussi
+     décommenter la partie `networks` et utiliser `http://jellyfin:8096`.
 4. Vérifie tes fichiers sans rien modifier :
    ```bash
    docker compose run --rm jellyverse --test
@@ -80,21 +93,75 @@ Trois sources sont lues et fusionnées :
    docker compose logs -f
    ```
 
-Le conteneur tourne en continu. Il met à jour les fiches toutes les
-`INTERVALLE_MINUTES` minutes, et **immédiatement** dès que tu ajoutes, modifies
-ou supprimes un `.yml` dans `/mnt/docker/jellyverse/data/univers/` (vérifié
-toutes les 10 secondes).
+## Fréquence de mise à jour
+
+| Déclencheur | Délai |
+|---|---|
+| Épisode ou film d'un univers terminé par `JELLYFIN_USER` | moins d'1 min (`DETECTION_LECTURE_SECONDES`) |
+| `.yml` ajouté / modifié / supprimé en local | ~10 s |
+| Mise à jour complète + synchro GitHub | toutes les 15 min (`INTERVALLE_MINUTES`) |
+
+La détection rapide ne coûte qu'une petite requête par minute : Jellyverse
+demande à Jellyfin le dernier élément terminé, et ne relance une mise à jour
+que s'il fait partie d'un univers. Le **panneau de progression**, lui, est toujours calculé
+en direct à l'ouverture, pour l'utilisateur connecté.
+
+## Médiathèque « Jellyverse »
+
+Une entrée **« Jellyverse »** est ajoutée dans **Mes médias** (accueil) et dans
+le **menu latéral**, juste après « Collections ». Elle est copiée sur la
+médiathèque « Collections » : même icône, même apparence. Elle ouvre la vue
+native de Jellyfin qui n'affiche **que les collections créées par
+l'application** (filtrées par leur tag `Jellyverse`), avec la grille
+d'affiches, les tris et les filtres habituels. La tuile d'accueil prend le fond
+d'un de tes univers.
+
+Comment ça marche : Jellyfin range toujours les collections créées par l'API
+dans sa médiathèque « Collections », et une vraie médiathèque séparée
+demanderait d'écrire dans les dossiers du serveur Jellyfin. Jellyverse évite
+donc tout accès aux fichiers : les collections restent dans « Collections »
+(elles y sont aussi visibles), et la médiathèque « Jellyverse » est une vue
+filtrée ajoutée par le script de l'interface. `MEDIATHEQUE=false` la retire.
+
+> Comme le bouton parchemin, cette entrée existe dans l'interface web (et les
+> applis qui l'utilisent), pas dans les applis TV natives.
+
+## Utilisation par d'autres applications
+
+Les collections Jellyverse portent le tag **`Jellyverse`**, ce qui permet aux
+autres applications et plugins de les retrouver par l'API :
+`GET /Items?Recursive=true&IncludeItemTypes=BoxSet&Tags=Jellyverse`.
+
+## Affiches des collections
+
+Chaque collection reçoit une **affiche** et un **fond**, par ordre de priorité :
+
+1. `/mnt/docker/jellyverse/affiches/perso/<univers>.jpg` (ou `.png`, `.webp`) :
+   ton image à toi, le nom est celui du fichier `.yml` (ex. `mushishi.jpg`) ;
+2. le bloc `affiche:` du `.yml` (`tmdb_collection`, `tmdb_serie`, `tmdb_film`,
+   `url` ou `fichier`) ;
+3. **automatique** : l'affiche TMDB du premier film / série de l'univers,
+   grâce à l'identifiant TMDB déjà connu de Jellyfin ;
+4. sans clé TMDB : les images Jellyfin de ce premier film / série.
+
+TMDB : crée une clé gratuite sur themoviedb.org (Paramètres → API) et mets-la
+dans `TMDB_API_KEY` (clé v3 ou jeton de lecture v4). Les affiches en français
+sont choisies en priorité, les fonds sans texte de préférence. Les images sont
+stockées dans `/mnt/docker/jellyverse/affiches/` : TMDB n'est réinterrogé que si
+la source change ou tous les 7 jours, soit **une requête par univers et par
+semaine** environ. Les images ne sont renvoyées à Jellyfin que si elles changent.
 
 ## Bouton dans l'interface Jellyfin
 
 L'application ajoute dans l'interface web de Jellyfin :
 
-- un **bouton flottant 🌌** en bas à droite, qui s'allume en bleu quand la page
-  affichée (série, saison, épisode, film ou collection) fait partie d'un univers ;
-- un **bouton « hub »** à côté de Lecture / Favori sur la page de détail ;
+- un **bouton parchemin 📜** à côté de Lecture / Favori sur la page de chaque
+  film, série, saison ou épisode d'un univers : il ouvre la **collection** de
+  l'univers (si l'élément appartient à plusieurs univers, une fenêtre propose le
+  choix). Sur la page de la collection, il ouvre le panneau de progression ;
 - un **panneau** avec l'ordre, la progression, l'étape en cours et un bouton
-  « Ouvrir » qui mène directement au prochain épisode ou film à regarder.
-  Sans univers sur la page, le bouton flottant liste tous tes univers.
+  « Ouvrir » qui mène directement au prochain épisode ou film à regarder
+  (ouvert par le parchemin depuis la page de la collection).
 
 La progression du panneau est celle **de l'utilisateur connecté** : chaque
 profil voit sa propre avancée (contrairement à la description de la collection).
@@ -144,8 +211,8 @@ location /univers/ {
   et les applis mobiles qui affichent l'interface web). Les applis TV natives
   (Android TV, Swiftfin…) n'exécutent pas ce script : elles n'ont que la
   description de la collection.
-- Le bouton à côté de Lecture / Favori dépend de la mise en page de la page de
-  détail ; si Jellyfin la change, le bouton flottant 🌌 reste disponible.
+- Si la page de détail n'a pas de zone de boutons (autre mise en page), le
+  parchemin s'affiche en bouton flottant, en bas à droite.
 
 ## Ajouter un univers
 
@@ -184,6 +251,10 @@ Voir `univers/mushishi.yml` et `univers/_modele.yml.exemple`.
 | `GITHUB_BRANCHE`      | `main`               | branche à lire                         |
 | `GITHUB_CHEMIN`       | `univers`            | dossier des `.yml` dans le dépôt       |
 | `GITHUB_TOKEN`        | —                    | uniquement pour un dépôt privé         |
+| `DETECTION_LECTURE_SECONDES` | `60`          | mise à jour rapide après un épisode terminé (`0` = off) |
+| `TMDB_API_KEY`        | —                    | clé TMDB pour les affiches             |
+| `TMDB_LANGUE`         | `fr`                 | langue préférée des affiches           |
+| `MEDIATHEQUE`         | `true`               | entrée « Jellyverse » dans Mes médias et le menu |
 
 Elles ont la priorité sur `/mnt/docker/jellyverse/data/config.yml`.
 
@@ -195,7 +266,6 @@ Elles ont la priorité sur `/mnt/docker/jellyverse/data/config.yml`.
   duplique le service dans `docker-compose.yml` avec un autre `JELLYFIN_USER`
   et un autre `PREFIXE_COLLECTION`.
 - La description est verrouillée pour que Jellyfin ne l'écrase pas.
-- Supprimer un `.yml` ne supprime pas la collection : efface-la dans Jellyfin.
 - Compatible Jellyfin 10.9 → 12.1. L'authentification utilise l'en-tête
   `Authorization: MediaBrowser Token="…"`, le seul encore accepté par Jellyfin 12
   (les anciens `X-Emby-Token` / `?api_key=` y sont désactivés).

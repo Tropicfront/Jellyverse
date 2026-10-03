@@ -20,6 +20,13 @@
 nom: "Mushishi"
 description: "Ordre de visionnage complet de l'univers Mushishi."
 
+# Affiche de la collection (facultatif). Sans ce bloc, l'affiche TMDB du
+# premier film / série trouvé est utilisée automatiquement.
+# affiche:
+#   tmdb_serie: 12345          # ou tmdb_film / tmdb_collection (id TMDB)
+#   # url: "https://…/affiche.jpg"
+#   # fichier: "perso/mushishi.jpg"   (relatif à /affiches)
+
 etapes:
   - titre: "Mushishi (Saison 1 — 26 épisodes)"
     serie: "Mushishi"

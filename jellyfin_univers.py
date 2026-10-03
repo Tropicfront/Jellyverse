@@ -14,6 +14,8 @@ Usage :
 """
 
 import argparse
+import base64
+import hashlib
 import io
 import json
 import os
@@ -132,7 +134,7 @@ class Jellyfin:
     def chercher(self, nom, types, annee=None):
         items = self.get(
             "/Items", userId=self.user_id, searchTerm=nom,
-            IncludeItemTypes=types, Recursive="true", Limit=30,
+            IncludeItemTypes=types, Recursive="true", Limit=30, Fields="ProviderIds",
         ).get("Items", [])
         if annee:
             items = [i for i in items if i.get("ProductionYear") == int(annee)]
@@ -144,9 +146,36 @@ class Jellyfin:
                         userId=self.user_id, enableUserData="true")
         return [e for e in data.get("Items", []) if e.get("LocationType") != "Virtual"]
 
-    def collections(self):
-        return self.get("/Items", userId=self.user_id,
-                        IncludeItemTypes="BoxSet", Recursive="true").get("Items", [])
+    def dernier_vu(self):
+        """Dernier épisode/film terminé par l'utilisateur (détection rapide des visionnages)."""
+        items = self.get("/Items", userId=self.user_id, SortBy="DatePlayed", SortOrder="Descending",
+                         Recursive="true", IncludeItemTypes="Episode,Movie", Filters="IsPlayed",
+                         Limit=1, enableUserData="true").get("Items", [])
+        if not items:
+            return None
+        return items[0]["Id"], (items[0].get("UserData") or {}).get("LastPlayedDate")
+
+    def image(self, item_id, type_image):
+        r = self.http.get(f"{self.base}/Items/{item_id}/Images/{type_image}", timeout=60)
+        if r.status_code == 404:
+            return None, None
+        r.raise_for_status()
+        return r.content, r.headers.get("Content-Type", "image/jpeg").split(";")[0]
+
+    def envoyer_image(self, item_id, type_image, contenu, mime):
+        """Jellyfin attend le contenu de l'image encodé en base64 dans le corps."""
+        r = self.http.post(f"{self.base}/Items/{item_id}/Images/{type_image}",
+                           data=base64.b64encode(contenu), headers={"Content-Type": mime}, timeout=120)
+        r.raise_for_status()
+
+    def supprimer(self, item_id):
+        self._req("DELETE", f"/Items/{item_id}")
+
+    def collections(self, champs=None):
+        params = {"userId": self.user_id, "IncludeItemTypes": "BoxSet", "Recursive": "true"}
+        if champs:
+            params["Fields"] = champs
+        return self.get("/Items", **params).get("Items", [])
 
     def enfants(self, parent_id):
         return self.get("/Items", userId=self.user_id, ParentId=parent_id).get("Items", [])
@@ -219,6 +248,7 @@ def traiter(jf, fichier, cfg, test=False, source="local"):
     info = {"id": fichier.stem, "nom": nom, "source": source,
             "description": str(data.get("description") or "").strip(),
             "collection_id": None, "etapes": [], "membres": set()}
+    premier_parent = None
     for i, etape in enumerate(etapes, 1):
         titre = etape.get("titre") or etape.get("film") or etape.get("serie") or f"Étape {i}"
         try:
@@ -232,6 +262,7 @@ def traiter(jf, fichier, cfg, test=False, source="local"):
         info["etapes"].append({"titre": titre, "cible": parent_id, "elements": ids_elements})
         if parent_id:
             info["membres"].add(parent_id)
+            premier_parent = premier_parent or parent_id
         for e in elements:
             info["membres"].add(e["Id"])
             if e.get("SeasonId"):
@@ -285,16 +316,24 @@ def traiter(jf, fichier, cfg, test=False, source="local"):
         print("  ⚠ aucun élément trouvé, collection non créée.")
         return info
 
-    cid = synchroniser_collection(jf, nom_collection, ids_collection)
+    cid = synchroniser_collection(jf, cfg, info["id"], nom_collection, ids_collection)
     info["collection_id"] = cid
     info["membres"].add(cid)
-    ecrire_description(jf, cid, texte)
+    ecrire_description(jf, cid, texte, nom_collection)
     print(f"  ✔ collection « {nom_collection} » à jour")
+    if cfg.get("_affiches"):
+        try:
+            gerer_affiches(jf, cfg, info["id"], data.get("affiche"), premier_parent, cid)
+        except Exception as e:  # noqa: BLE001
+            print(f"  ⚠ affiche : {e}")
     return info
 
 
-def synchroniser_collection(jf, nom_collection, ids):
-    col = next((c for c in jf.collections() if c.get("Name") == nom_collection), None)
+def synchroniser_collection(jf, cfg, uid, nom_collection, ids):
+    # On retrouve d'abord la collection par son tag Jellyverse + nom, puis par nom seul
+    collections = jf.collections(champs="Tags")
+    col = (next((c for c in collections if c.get("Name") == nom_collection and TAG in (c.get("Tags") or [])), None)
+           or next((c for c in collections if c.get("Name") == nom_collection), None))
     if col is None:
         r = jf.post("/Collections", params={"name": nom_collection, "ids": ",".join(ids)})
         return r["Id"]
@@ -309,15 +348,168 @@ def synchroniser_collection(jf, nom_collection, ids):
     return cid
 
 
-def ecrire_description(jf, cid, texte):
+TAG = "Jellyverse"  # permet aux autres applis / plugins de retrouver les collections : /Items?Tags=Jellyverse
+
+
+def ecrire_description(jf, cid, texte, nom=None):
     it = jf.item(cid)
-    if it.get("Overview") == texte:
+    tags = list(it.get("Tags") or [])
+    if it.get("Overview") == texte and TAG in tags and (not nom or it.get("Name") == nom):
         return
     it["Overview"] = texte
+    if nom:
+        it["Name"] = nom
+    if TAG not in tags:
+        it["Tags"] = tags + [TAG]
     verrous = set(it.get("LockedFields") or [])
-    verrous.add("Overview")  # empêche Jellyfin d'écraser la description
+    verrous.update({"Overview", "Tags", "Name"})  # empêche Jellyfin d'écraser nom, description et tag
     it["LockedFields"] = sorted(verrous)
     jf.post(f"/Items/{cid}", json=it)
+
+
+# ---------------------------------------------------------------- affiches (TMDB)
+#
+# Ordre de priorité pour l'affiche d'un univers :
+#   1. /affiches/perso/<univers>.jpg|png|webp     (fichier déposé par l'utilisateur)
+#   2. clé « affiche » du .yml : tmdb_collection / tmdb_serie / tmdb_film / url / fichier
+#   3. automatique : TMDB du premier film / série trouvé (via ses identifiants Jellyfin)
+#   4. sans clé TMDB : image Jellyfin du premier film / série
+# Les images sont gardées dans /affiches/<univers>/ et TMDB n'est réinterrogé
+# qu'au changement de source ou tous les 7 jours : très peu de requêtes.
+
+TMDB_API = "https://api.themoviedb.org/3"
+TMDB_IMG = "https://image.tmdb.org/t/p/original"
+RECHARGER_TMDB_S = 7 * 24 * 3600
+EXT_MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+GENRES_TMDB = {"tmdb_collection": "collection", "tmdb_serie": "tv", "tmdb_film": "movie"}
+
+
+class Tmdb:
+    def __init__(self, cle, langue="fr"):
+        self.langue = str(langue or "fr").split("-")[0]
+        self.http = requests.Session()
+        self.params = {}
+        if cle.startswith("eyJ"):  # jeton de lecture (v4)
+            self.http.headers["Authorization"] = f"Bearer {cle}"
+        else:                      # clé API (v3)
+            self.params["api_key"] = cle
+
+    def images(self, genre, tmdb_id):
+        r = self.http.get(f"{TMDB_API}/{genre}/{tmdb_id}/images", timeout=20, params={
+            **self.params, "include_image_language": f"{self.langue},null,en"})
+        if r.status_code == 401:
+            raise RuntimeError("clé TMDB refusée")
+        r.raise_for_status()
+        donnees = r.json()
+
+        def choisir(liste, ordre):
+            liste = sorted(liste, key=lambda i: (i.get("vote_average", 0), i.get("vote_count", 0)), reverse=True)
+            for langue in ordre:
+                for im in liste:
+                    if im.get("iso_639_1") == langue:
+                        return im["file_path"]
+            return liste[0]["file_path"] if liste else None
+
+        return (choisir(donnees.get("posters", []), [self.langue, None, "en"]),
+                choisir(donnees.get("backdrops", []), [None, self.langue, "en"]))
+
+
+def _sha(contenu):
+    return hashlib.sha1(contenu).hexdigest()
+
+
+def _mime(nom, contenu):
+    if contenu[:4] == b"\x89PNG":
+        return "image/png"
+    if contenu[:4] == b"RIFF":
+        return "image/webp"
+    return EXT_MIME.get(Path(nom).suffix.lower(), "image/jpeg")
+
+
+def gerer_affiches(jf, cfg, uid, reglage, premier_parent, cid):
+    racine = cfg["_affiches"]
+    tmdb = cfg.get("_tmdb")
+    dossier = racine / uid
+    dossier.mkdir(parents=True, exist_ok=True)
+    chemin_etat = dossier / "etat.json"
+    etat = json.loads(chemin_etat.read_text()) if chemin_etat.exists() else {}
+    reglage = reglage or {}
+    images = {}  # type Jellyfin -> (contenu, mime)
+
+    # 1. fichier personnel
+    perso = next((f for f in sorted((racine / "perso").glob(f"{uid}.*"))
+                  if f.suffix.lower() in EXT_MIME), None) if (racine / "perso").is_dir() else None
+    if perso:
+        contenu = perso.read_bytes()
+        images["Primary"] = (contenu, _mime(perso.name, contenu))
+        source = f"perso:{_sha(contenu)}"
+    elif isinstance(reglage, dict) and reglage.get("fichier"):
+        f = racine / str(reglage["fichier"])
+        contenu = f.read_bytes()
+        images["Primary"] = (contenu, _mime(f.name, contenu))
+        source = f"fichier:{_sha(contenu)}"
+    elif isinstance(reglage, dict) and reglage.get("url"):
+        source = f"url:{reglage['url']}"
+        if etat.get("source") != source or not (dossier / "affiche").exists():
+            r = requests.get(reglage["url"], timeout=60)
+            r.raise_for_status()
+            (dossier / "affiche").write_bytes(r.content)
+    else:
+        # 2-3. TMDB (identifiant du .yml, sinon celui du premier film / série)
+        genre = tmdb_id = None
+        if isinstance(reglage, dict):
+            for cle_yml, g in GENRES_TMDB.items():
+                if reglage.get(cle_yml):
+                    genre, tmdb_id = g, reglage[cle_yml]
+        if not tmdb_id and premier_parent:
+            if etat.get("parent") == premier_parent and etat.get("tmdb_auto"):
+                genre, tmdb_id = etat["tmdb_auto"]
+            else:
+                it = jf.item(premier_parent)
+                ids = {k.lower(): v for k, v in (it.get("ProviderIds") or {}).items()}
+                if ids.get("tmdb"):
+                    genre = "tv" if it.get("Type") == "Series" else "movie"
+                    tmdb_id = ids["tmdb"]
+                    etat["tmdb_auto"] = [genre, tmdb_id]
+                etat["parent"] = premier_parent
+        if tmdb and tmdb_id:
+            source = f"tmdb:{genre}:{tmdb_id}"
+            perime = time.time() - etat.get("date", 0) > RECHARGER_TMDB_S
+            if etat.get("source") != source or perime or not (dossier / "affiche").exists():
+                affiche, fond = tmdb.images(genre, tmdb_id)
+                for chemin_tmdb, nom in ((affiche, "affiche"), (fond, "fond")):
+                    if chemin_tmdb:
+                        r = requests.get(TMDB_IMG + chemin_tmdb, timeout=60)
+                        r.raise_for_status()
+                        (dossier / nom).write_bytes(r.content)
+                etat["date"] = time.time()
+                print(f"  🖼 affiche TMDB téléchargée ({genre} {tmdb_id})")
+        elif premier_parent:
+            # 4. sans TMDB : on reprend les images Jellyfin du premier élément
+            source = f"jellyfin:{premier_parent}"
+            if etat.get("source") != source or not (dossier / "affiche").exists():
+                for type_image, nom in (("Primary", "affiche"), ("Backdrop", "fond")):
+                    contenu, _ = jf.image(premier_parent, type_image)
+                    if contenu:
+                        (dossier / nom).write_bytes(contenu)
+        else:
+            return
+
+    for type_image, nom in (("Primary", "affiche"), ("Backdrop", "fond")):
+        if type_image not in images and (dossier / nom).exists():
+            contenu = (dossier / nom).read_bytes()
+            images[type_image] = (contenu, _mime(nom, contenu))
+
+    # Envoi à Jellyfin uniquement si l'image ou la collection a changé
+    envoye = etat.get("envoye", {})
+    for type_image, (contenu, mime) in images.items():
+        empreinte = f"{cid}:{_sha(contenu)}"
+        if envoye.get(type_image) != empreinte:
+            jf.envoyer_image(cid, type_image, contenu, mime)
+            envoye[type_image] = empreinte
+            print(f"  🖼 {'affiche appliquée' if type_image == 'Primary' else 'fond appliqué'} à la collection")
+    etat.update({"source": source, "envoye": envoye})
+    chemin_etat.write_text(json.dumps(etat, indent=2))
 
 
 # ---------------------------------------------------------------- programme principal
@@ -326,8 +518,7 @@ ETAT = {"maj": None, "univers": []}  # données servies au bouton de l'interface
 VERROU = threading.Lock()
 
 
-def executer(cfg, dossiers, test):
-    jf = Jellyfin(cfg["serveur"], cfg["cle_api"], cfg["utilisateur"])
+def executer(jf, cfg, dossiers, test):
     fichiers = lister_univers(dossiers)
     if not fichiers:
         print("Aucun fichier d'univers trouvé (" +
@@ -343,6 +534,7 @@ def executer(cfg, dossiers, test):
             print(f"  ✖ erreur sur {f.name} : {e}")
     with VERROU:
         ETAT["univers"] = univers
+        ETAT["mediatheque"] = bool(cfg.get("mediatheque", True))
         ETAT["maj"] = time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
@@ -478,6 +670,11 @@ ENV = {  # variables d'environnement (Docker) -> clés de config
     "INTERVALLE_MINUTES": "intervalle_minutes",
     "DESCRIPTION_HTML": "description_html",
     "PORT_WEB": "port_web",
+    "DETECTION_LECTURE_SECONDES": "detection_lecture_secondes",
+    "TMDB_API_KEY": "tmdb_cle",
+    "TMDB_LANGUE": "tmdb_langue",
+    "DOSSIER_AFFICHES": "dossier_affiches",
+    "MEDIATHEQUE": "mediatheque",
 }
 
 
@@ -488,8 +685,9 @@ def charger_config(chemin):
     for var, cle_cfg in ENV.items():
         if os.environ.get(var) not in (None, ""):
             cfg[cle_cfg] = os.environ[var]
-    if str(cfg.get("description_html", "true")).lower() in ("false", "0", "non", "no"):
-        cfg["description_html"] = False
+    for booleen in ("description_html", "mediatheque"):
+        if str(cfg.get(booleen, "true")).lower() in ("false", "0", "non", "no"):
+            cfg[booleen] = False
     manquants = [c for c in ("serveur", "cle_api", "utilisateur") if not cfg.get(c)]
     if manquants:
         raise SystemExit(f"Configuration incomplète : {', '.join(manquants)} "
@@ -531,32 +729,78 @@ def main():
         print(f"  • github : {cfg['github_depot']} / {cfg.get('github_chemin') or 'univers'}", flush=True)
     print(f"  • local  : {local}  (prioritaire en cas de même nom)", flush=True)
 
+    affiches = Path(cfg.get("dossier_affiches") or (local.parent.parent / "affiches"))
+    try:
+        affiches.mkdir(parents=True, exist_ok=True)
+        cfg["_affiches"] = affiches
+        print(f"  • affiches : {affiches}", flush=True)
+    except OSError as e:
+        print(f"⚠ dossier des affiches inutilisable ({e}) : affiches désactivées", flush=True)
+    if cfg.get("tmdb_cle"):
+        cfg["_tmdb"] = Tmdb(str(cfg["tmdb_cle"]), cfg.get("tmdb_langue", "fr"))
+        print("  • TMDB : activé", flush=True)
+    else:
+        print("  • TMDB : pas de clé, affiches reprises depuis Jellyfin", flush=True)
+
+    print(f"  • médiathèque Jellyverse : {'affichée' if cfg.get('mediatheque', True) else 'désactivée'} "
+          "(interface web)", flush=True)
+
     synchroniser_github(cfg, cache_github)
     if not args.boucle:
-        executer(cfg, dossiers, args.test)
+        executer(Jellyfin(cfg["serveur"], cfg["cle_api"], cfg["utilisateur"]), cfg, dossiers, args.test)
         return
 
     port = int(cfg.get("port_web", 8099) or 0)
     if port:
         demarrer_serveur(port)
     intervalle = float(cfg.get("intervalle_minutes", 15)) * 60
-    print(f"Mise à jour toutes les {intervalle / 60:g} min et dès qu'un .yml local change.", flush=True)
-    derniere_sig, dernier_passage = None, time.time()
+    detection = float(cfg.get("detection_lecture_secondes", 60) or 0)
+    print(f"Mise à jour toutes les {intervalle / 60:g} min, dès qu'un .yml local change"
+          + (f" et moins de {detection:g} s après la fin d'un épisode." if detection else "."), flush=True)
+
+    jf = None
+    derniere_sig, dernier_passage, dernier_controle, dernier_vu = None, 0.0, 0.0, None
     premier = True
     while True:
-        if not premier and time.time() - dernier_passage >= intervalle:
-            synchroniser_github(cfg, cache_github)
-        sig = signature(dossiers)
-        if premier or sig != derniere_sig or time.time() - dernier_passage >= intervalle:
-            raison = ("démarrage" if premier else
-                      "fichiers modifiés" if sig != derniere_sig else "planifiée")
-            print(time.strftime(f"\n[%Y-%m-%d %H:%M:%S] mise à jour ({raison})"), flush=True)
-            try:
-                executer(cfg, dossiers, args.test)
-            except Exception as e:  # noqa: BLE001
-                print(f"✖ {e}", flush=True)
-            derniere_sig, dernier_passage, premier = signature(dossiers), time.time(), False
+        try:
+            if jf is None:
+                jf = Jellyfin(cfg["serveur"], cfg["cle_api"], cfg["utilisateur"])
+            maintenant = time.time()
+            raison = None
+            if premier:
+                raison = "démarrage"
+            elif maintenant - dernier_passage >= intervalle:
+                synchroniser_github(cfg, cache_github)
+                raison = "planifiée"
+            sig = signature(dossiers)
+            if raison is None and sig != derniere_sig:
+                raison = "fichiers modifiés"
+            if detection and maintenant - dernier_controle >= detection:
+                dernier_controle = maintenant
+                vu = jf.dernier_vu()
+                if raison is None and vu != dernier_vu and vu and dernier_vu is not None:
+                    with VERROU:
+                        concerne = any(norm_id(vu[0]) in {norm_id(m) for m in u["membres"]}
+                                       for u in ETAT["univers"])
+                    if concerne:
+                        raison = "épisode / film terminé"
+                dernier_vu = vu
+            if raison:
+                print(time.strftime(f"\n[%Y-%m-%d %H:%M:%S] mise à jour ({raison})"), flush=True)
+                executer(jf, cfg, dossiers, args.test)
+                derniere_sig, dernier_passage, premier = signature(dossiers), time.time(), False
+        except SystemExit as e:
+            print(f"✖ {e} — nouvel essai dans 1 min", flush=True)
+            jf = None
+            time.sleep(50)
+        except Exception as e:  # noqa: BLE001
+            print(f"✖ {e}", flush=True)
+            jf = None
         time.sleep(10)
+
+
+def norm_id(i):
+    return str(i or "").replace("-", "").lower()
 
 
 if __name__ == "__main__":

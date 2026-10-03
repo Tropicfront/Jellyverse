@@ -127,14 +127,21 @@
     return it.Name || '';
   }
 
+  // ------------------------------------------------------------ image du parchemin
+  const PARCHEMIN = `<svg class="jfu-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="16" y="12" width="32" height="40" fill="#f3e0b5" stroke="#8b5e34" stroke-width="2"/>
+    <g stroke="#a07a4b" stroke-width="2.4" stroke-linecap="round">
+      <line x1="22" y1="22" x2="42" y2="22"/><line x1="22" y1="28" x2="42" y2="28"/>
+      <line x1="22" y1="34" x2="38" y2="34"/><line x1="22" y1="40" x2="34" y2="40"/></g>
+    <circle cx="40" cy="43" r="4.5" fill="#b23a3a" stroke="#7a1f1f" stroke-width="1.2"/>
+    <rect x="10" y="7" width="44" height="9" rx="4.5" fill="#d8b27a" stroke="#8b5e34" stroke-width="2"/>
+    <circle cx="10.5" cy="11.5" r="4" fill="#c4955a" stroke="#8b5e34" stroke-width="2"/>
+    <rect x="10" y="48" width="44" height="9" rx="4.5" fill="#d8b27a" stroke="#8b5e34" stroke-width="2"/>
+    <circle cx="53.5" cy="52.5" r="4" fill="#c4955a" stroke="#8b5e34" stroke-width="2"/>
+  </svg>`;
+
   // ------------------------------------------------------------ styles
   const css = `
-  .jfu-flottant{position:fixed;right:20px;bottom:90px;z-index:9998;width:48px;height:48px;border-radius:50%;
-    border:none;background:rgba(30,30,30,.85);color:#fff;font-size:22px;cursor:pointer;
-    box-shadow:0 4px 14px rgba(0,0,0,.5);transition:transform .15s,background .15s;display:none}
-  .jfu-flottant:hover{transform:scale(1.08)}
-  .jfu-flottant.actif{background:#00a4dc;animation:jfu-pulse 2s ease-out 1}
-  @keyframes jfu-pulse{0%{box-shadow:0 0 0 0 rgba(0,164,220,.7)}100%{box-shadow:0 0 0 18px rgba(0,164,220,0)}}
   .jfu-fond{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.65);display:flex;
     align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)}
   .jfu-panneau{background:#1c1c1e;color:#eee;border-radius:14px;width:100%;max-width:680px;max-height:86vh;
@@ -175,10 +182,19 @@
   .jfu-pied{margin-top:16px;text-align:right}
   .jfu-lien{background:none;border:none;color:#00a4dc;cursor:pointer;font-size:.9em}
   .jfu-msg{color:#aaa;padding:10px 0}
+  .jfu-parchemin .jfu-svg{width:2em;height:2em;display:block}
+  .jfu-parchemin:hover .jfu-svg{transform:rotate(-6deg) scale(1.08);transition:transform .15s}
+  .jfu-parchemin-flottant{position:fixed;right:20px;bottom:90px;z-index:9998;width:48px;height:48px;
+    border-radius:50%;border:none;background:rgba(30,30,30,.85);cursor:pointer;padding:6px;display:none;
+    box-shadow:0 4px 14px rgba(0,0,0,.5)}
+  .jfu-parchemin-flottant .jfu-svg{width:100%;height:100%}
+  .jfu-choix{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .jfu-bouton.secondaire{background:#3a3a3c}
   `;
   const style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
+
 
   // ------------------------------------------------------------ panneau
   let fond = null;
@@ -277,53 +293,181 @@
     });
   }
 
-  function ouvrirPour(id) {
+  function ouvrirChoix(liste) {
+    const corps = ouvrirCadre('📜 Univers liés', false);
+    corps.innerHTML = '<div class="jfu-liste-u"></div>';
+    const zone = corps.querySelector('.jfu-liste-u');
+    liste.forEach((u) => {
+      const carte = document.createElement('div');
+      carte.className = 'jfu-carte';
+      carte.innerHTML = `<div class="jfu-l1"><span>${esc(u.nom)}</span></div>
+        <div class="jfu-choix">${u.collection_id ? '<button class="jfu-bouton" data-a="col">Ouvrir la collection</button>' : ''}
+        <button class="jfu-bouton secondaire" data-a="prog">Progression</button></div>`;
+      const col = carte.querySelector('[data-a="col"]');
+      if (col) col.onclick = (e) => { e.stopPropagation(); naviguer(u.collection_id); };
+      carte.querySelector('[data-a="prog"]').onclick = (e) => { e.stopPropagation(); ouvrirUnivers(u, false); };
+      zone.appendChild(carte);
+    });
+  }
+
+  // Bouton parchemin : film / série / saison / épisode → collection de l'univers ;
+  // sur la page de la collection elle-même → panneau de progression.
+  function clicParchemin(id) {
     const liste = universDe(id);
-    if (liste.length === 1) ouvrirUnivers(liste[0], true);
-    else ouvrirListe();
+    if (!liste.length) return;
+    const surCollection = liste.find((u) => norm(u.collection_id) === id);
+    if (surCollection) return ouvrirUnivers(surCollection, false);
+    if (liste.length > 1) return ouvrirChoix(liste);
+    if (liste[0].collection_id) return naviguer(liste[0].collection_id);
+    ouvrirUnivers(liste[0], false);
+  }
+
+  // ------------------------------------------------------------ médiathèque « Jellyverse »
+  // Entrée ajoutée dans « Mes médias » et dans le menu latéral, copiée sur la
+  // médiathèque « Collections » (même icône, même apparence). Elle ouvre la vue
+  // native de Jellyfin filtrée sur le tag Jellyverse : grille, tris et filtres.
+  const NOM_MEDIATHEQUE = 'Jellyverse';
+  const TAG = 'Jellyverse';
+
+  function urlMediatheque() {
+    const c = api();
+    const sid = c && typeof c.serverId === 'function' ? c.serverId() : '';
+    return '#/list?type=BoxSet&tag=' + encodeURIComponent(TAG) + (sid ? '&serverId=' + sid : '');
+  }
+
+  function versMediatheque(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    location.hash = urlMediatheque();
+  }
+
+  function imageMediatheque() {
+    const c = api();
+    const u = donnees && donnees.univers.find((x) => x.collection_id);
+    if (!c || !u || typeof c.getImageUrl !== 'function') return null;
+    return c.getImageUrl(u.collection_id, { type: 'Backdrop', maxWidth: 800 });
+  }
+
+  function preparerCopie(el) {
+    const url = urlMediatheque();
+    [el, ...el.querySelectorAll('*')].forEach((n) => {
+      ['data-action', 'data-id', 'data-serverid', 'data-type', 'data-collectiontype', 'data-isfolder',
+        'data-index', 'data-prefix', 'data-itemid', 'data-src'].forEach((a) => n.removeAttribute(a));
+      n.classList.remove('itemAction', 'Mui-selected', 'navMenuOption-selected');
+      if (n.tagName === 'A') n.setAttribute('href', url);
+    });
+    el.querySelectorAll('.cardOverlayContainer, .cardIndicators, .btnCardOptions, canvas').forEach((n) => n.remove());
+    el.classList.add('jfu-mediatheque');
+    el.addEventListener('click', versMediatheque, true);
+    return el;
+  }
+
+  function changerTexte(el, selecteurs) {
+    for (const sel of selecteurs) {
+      const t = el.querySelector(sel);
+      if (t) { t.textContent = NOM_MEDIATHEQUE; return; }
+    }
+  }
+
+  const estCollections = (a) => /[#/]boxsets\?/.test(a.getAttribute('href') || '');
+
+  function injecterMediatheque() {
+    const actif = donnees && donnees.mediatheque !== false && donnees.univers.some((u) => u.collection_id);
+    if (!actif) { document.querySelectorAll('.jfu-mediatheque').forEach((n) => n.remove()); return; }
+
+    // 1. Accueil — tuiles « Mes médias »
+    document.querySelectorAll('.itemsContainer').forEach((cont) => {
+      const cartes = [...cont.children].filter((c) => c.classList.contains('card') && c.dataset.type === 'CollectionFolder');
+      if (!cartes.length || cont.querySelector(':scope > .jfu-mediatheque')) return;
+      const modele = cartes.find((c) => c.dataset.collectiontype === 'boxsets') || cartes[cartes.length - 1];
+      const copie = preparerCopie(modele.cloneNode(true));
+      changerTexte(copie, ['.cardText', '.cardTextCentered']);
+      const image = copie.querySelector('.cardImageContainer');
+      const src = imageMediatheque();
+      if (image && src) {
+        image.classList.remove('lazy', 'defaultCardBackground');
+        image.classList.add('coveredImage');
+        image.style.backgroundImage = 'url("' + src + '")';
+        image.querySelectorAll('.cardImageIcon, .material-icons').forEach((n) => n.remove());
+      }
+      modele.after(copie);
+    });
+
+    // 2. Accueil — boutons « Mes médias » (affichage compact)
+    document.querySelectorAll('.homeLibraryButtonContainer').forEach((cont) => {
+      if (cont.querySelector('.jfu-mediatheque')) return;
+      const boutons = [...cont.querySelectorAll('a.homeLibraryButton')];
+      if (!boutons.length) return;
+      const modele = boutons.find(estCollections) || boutons[boutons.length - 1];
+      const copie = preparerCopie(modele.cloneNode(true));
+      changerTexte(copie, ['.homeLibraryText']);
+      modele.after(copie);
+    });
+
+    // 3. Menu latéral — mise en page « Legacy »
+    document.querySelectorAll('.libraryMenuOptions').forEach((cont) => {
+      if (cont.querySelector('.jfu-mediatheque')) return;
+      const liens = [...cont.querySelectorAll('a.navMenuOption')];
+      if (!liens.length) return;
+      const modele = liens.find(estCollections) || liens[liens.length - 1];
+      const copie = preparerCopie(modele.cloneNode(true));
+      changerTexte(copie, ['.navMenuOptionText']);
+      modele.after(copie);
+    });
+
+    // 4. Menu latéral — mise en page « Modern » (par défaut dans Jellyfin 12)
+    document.querySelectorAll('a[href]').forEach((a) => {
+      if (!estCollections(a) || a.closest('.libraryMenuOptions, .homeLibraryButtonContainer, .card, .jfu-mediatheque')) return;
+      const li = a.closest('li');
+      if (!li || !li.parentElement || li.parentElement.querySelector(':scope > .jfu-mediatheque')) return;
+      const copie = preparerCopie(li.cloneNode(true));
+      changerTexte(copie, ['.MuiListItemText-primary', '.MuiTypography-root', '.MuiListItemText-root']);
+      li.after(copie);
+    });
   }
 
   // ------------------------------------------------------------ boutons
-  const flottant = document.createElement('button');
-  flottant.className = 'jfu-flottant';
-  flottant.title = 'Univers';
-  flottant.textContent = '🌌';
-  flottant.onclick = () => ouvrirPour(idCourant());
-  document.body.appendChild(flottant);
+  const parcheminFlottant = document.createElement('button');
+  parcheminFlottant.className = 'jfu-parchemin-flottant';
+  parcheminFlottant.innerHTML = PARCHEMIN;
+  parcheminFlottant.onclick = () => clicParchemin(idCourant());
+  document.body.appendChild(parcheminFlottant);
 
-  function boutonDetail(id) {
-    // Page de détail « Legacy » : on ajoute un bouton à côté de Lecture / Favori…
-    const zone = document.querySelector('.itemDetailPage:not(.hide) .mainDetailButtons');
-    if (!zone) return;
-    const existant = zone.querySelector('.jfu-detail');
+  function titreParchemin(id, liste) {
+    return liste.some((u) => norm(u.collection_id) === id)
+      ? 'Progression de l\'univers'
+      : 'Voir l\'univers : ' + liste.map((u) => u.nom).join(', ');
+  }
+
+  function boutonParchemin(id) {
     const liste = universDe(id);
+    const zone = document.querySelector('.itemDetailPage:not(.hide) .mainDetailButtons');
+    // Mise en page sans zone de boutons : parchemin flottant en bas à droite
+    parcheminFlottant.style.display = liste.length && !zone ? 'block' : 'none';
+    parcheminFlottant.title = liste.length ? titreParchemin(id, liste) : '';
+    if (!zone) return;
+    const existant = zone.querySelector('.jfu-parchemin');
     if (!liste.length) { if (existant) existant.remove(); return; }
     if (existant && existant.dataset.item === id) return;
     if (existant) existant.remove();
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'button-flat detailButton emby-button jfu-detail';
+    b.className = 'button-flat detailButton emby-button jfu-parchemin';
     b.dataset.item = id;
-    b.title = 'Univers : ' + liste.map((u) => u.nom).join(', ');
-    b.innerHTML = '<div class="detailButton-content"><span class="material-icons detailButton-icon hub" aria-hidden="true">hub</span></div>';
-    b.onclick = () => ouvrirPour(id);
+    b.title = titreParchemin(id, liste);
+    b.innerHTML = '<div class="detailButton-content">' + PARCHEMIN + '</div>';
+    b.onclick = () => clicParchemin(id);
     zone.appendChild(b);
   }
 
-  let dernierUrl = '';
   function tick() {
     const connecte = !!api();
     const lecture = /\/(video|nowplaying|login|selectserver|wizard)/i.test(location.hash);
-    flottant.style.display = connecte && !lecture ? 'block' : 'none';
-    if (!connecte) return;
+    if (!connecte || lecture) { parcheminFlottant.style.display = 'none'; return; }
     const id = idCourant();
-    const dedans = universDe(id).length > 0;
-    if (location.href !== dernierUrl) {
-      dernierUrl = location.href;
-      flottant.classList.toggle('actif', dedans);
-      flottant.title = dedans ? 'Univers : ' + universDe(id).map((u) => u.nom).join(', ') : 'Mes univers';
-    }
-    if (id) boutonDetail(id);
+    injecterMediatheque();
+    if (id) boutonParchemin(id);
+    else parcheminFlottant.style.display = 'none';
   }
 
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermerPanneau(); });

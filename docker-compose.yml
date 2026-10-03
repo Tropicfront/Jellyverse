@@ -4,11 +4,16 @@ services:
     container_name: jellyverse
     restart: unless-stopped
     environment:
-      - JELLYFIN_URL=http://jellyfin:8096      # ou http://192.168.1.10:8096
+      - JELLYFIN_URL=http://192.168.1.20:8096  # adresse de la machine Jellyfin
       - JELLYFIN_API_KEY=COLLE_TA_CLE_API_ICI
       - JELLYFIN_USER=MonPseudo
-      - INTERVALLE_MINUTES=15
+      - INTERVALLE_MINUTES=15                  # mise à jour complète des collections
+      - DETECTION_LECTURE_SECONDES=60          # mise à jour rapide après un épisode terminé (0 = off)
+      # Affiches TMDB (clé API v3 ou jeton de lecture v4 sur themoviedb.org)
+      - TMDB_API_KEY=
+      - TMDB_LANGUE=fr
       - "PREFIXE_COLLECTION=🌌 "
+      - MEDIATHEQUE=true                       # médiathèque « Jellyverse » dans Mes médias et le menu
       - PORT_WEB=8099                          # sert le bouton de l'interface
       # Univers officiels publiés sur GitHub (laisser vide pour désactiver)
       - GITHUB_DEPOT=tropicfront/jellyverse    # à adapter : compte/dépôt
@@ -20,6 +25,7 @@ services:
       - "8099:8099"                            # doit être joignable par ton navigateur
     volumes:
       - /mnt/docker/jellyverse/data:/data      # tes fichiers : config.yml + univers/*.yml
+      - /mnt/docker/jellyverse/affiches:/affiches  # affiches téléchargées + perso/
     # Si Jellyfin tourne dans un autre docker-compose, décommente pour
     # rejoindre son réseau et utiliser http://jellyfin:8096 :
     # networks:

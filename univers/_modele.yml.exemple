@@ -2,6 +2,9 @@
 nom: "Nom de l'univers"
 description: "Petite phrase affichée en haut de la fiche (facultatif)"
 
+# affiche:                      # facultatif, sinon automatique via TMDB
+#   tmdb_collection: 1241       # ex. une saga de films sur TMDB
+
 etapes:
   - titre: "Série — saison entière"
     serie: "Nom de la série"
