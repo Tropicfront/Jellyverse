@@ -18,7 +18,7 @@ Progression : 31/64 — 48 %
 ## Structure
 
 ```
-jellyfin-univers/
+jellyverse/
 ├── docker-compose.yml     ← réglages de connexion
 ├── Dockerfile
 ├── jellyfin_univers.py
@@ -42,11 +42,12 @@ jellyfin-univers/
    - Sinon, mets l'IP du serveur : `http://192.168.1.10:8096`.
 3. Vérifie tes fichiers sans rien modifier :
    ```bash
-   docker compose run --rm jellyfin-univers --test
+   docker compose run --rm jellyverse --test
    ```
 4. Lance l'application :
    ```bash
-   docker compose up -d --build
+   docker build -t tropicfront/jellyverse .
+   docker compose up -d
    docker compose logs -f
    ```
 
@@ -95,14 +96,14 @@ Pour vérifier, ouvre `http://IP:8099/api/univers` dans ton navigateur.
 
 Si tu accèdes à Jellyfin en `https://`, le navigateur bloque un script en
 `http://`. Expose l'application derrière le même reverse proxy, par exemple
-`https://jellyfin.mondomaine.fr/univers/` → `http://jellyfin-univers:8099/`,
+`https://jellyfin.mondomaine.fr/univers/` → `http://jellyverse:8099/`,
 et utilise `https://jellyfin.mondomaine.fr/univers/univers.js` dans le script.
 
 Exemple Nginx :
 
 ```nginx
 location /univers/ {
-    proxy_pass http://jellyfin-univers:8099/;
+    proxy_pass http://jellyverse:8099/;
 }
 ```
 

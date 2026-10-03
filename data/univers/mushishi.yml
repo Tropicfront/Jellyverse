@@ -1,0 +1,49 @@
+# =============================================================
+#  UNIVERS : Mushishi
+# =============================================================
+# Chaque étape doit contenir UNE de ces clés pour être trouvée :
+#   serie: "Nom exact dans Jellyfin"   (+ saison / episodes optionnels)
+#   film:  "Nom exact dans Jellyfin"
+#   id:    "identifiant Jellyfin"      (le plus fiable, voir README)
+#
+# Options :
+#   titre:   texte affiché sur la fiche (libre)
+#   saison:  numéro de saison (0 = spéciaux / OVA)
+#   episodes: 3  |  [1, 4]  |  "1-10"  |  "1-10, 12"
+#   annee:   pour départager deux titres identiques
+#   inclure_speciaux: true   (si serie sans saison, inclut la saison 0)
+#
+# ⚠ Adapte les noms / saisons à la façon dont TA bibliothèque
+#   est organisée (regarde les noms exacts dans Jellyfin).
+# =============================================================
+
+nom: "Mushishi"
+description: "Ordre de visionnage complet de l'univers Mushishi."
+
+etapes:
+  - titre: "Mushishi (Saison 1 — 26 épisodes)"
+    serie: "Mushishi"
+    saison: 1
+
+  - titre: "L'Ombre qui dore le soleil (OVA — Hihamukage)"
+    serie: "Mushishi"
+    saison: 0
+    episodes: 1
+
+  - titre: "Le Suivant (Saison 2, Partie 1 — Zoku Shou)"
+    serie: "Mushishi"
+    saison: 2
+    episodes: "1-10"
+
+  - titre: "Le Chemin des épines (OVA — Odoro no Michi)"
+    serie: "Mushishi"
+    saison: 0
+    episodes: 2
+
+  - titre: "Le Suivant – Saison 2 (Partie 2 — Zoku Shou 2nd Season)"
+    serie: "Mushishi"
+    saison: 2
+    episodes: "11-20"
+
+  - titre: "Les Gouttes de roches (Film — Suzu no Shizuku)"
+    film: "Mushishi: Suzu no Shizuku"

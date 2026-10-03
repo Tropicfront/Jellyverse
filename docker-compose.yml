@@ -1,8 +1,7 @@
 services:
-  jellyfin-univers:
-    build: .
-    image: jellyfin-univers:latest
-    container_name: jellyfin-univers
+  jellyverse:
+    image: tropicfront/jellyverse
+    container_name: jellyverse
     restart: unless-stopped
     environment:
       - JELLYFIN_URL=http://jellyfin:8096      # ou http://192.168.1.10:8096
