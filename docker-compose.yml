@@ -1,0 +1,26 @@
+services:
+  jellyfin-univers:
+    build: .
+    image: jellyfin-univers:latest
+    container_name: jellyfin-univers
+    restart: unless-stopped
+    environment:
+      - JELLYFIN_URL=http://jellyfin:8096      # ou http://192.168.1.10:8096
+      - JELLYFIN_API_KEY=COLLE_TA_CLE_API_ICI
+      - JELLYFIN_USER=MonPseudo
+      - INTERVALLE_MINUTES=15
+      - "PREFIXE_COLLECTION=🌌 "
+      - PORT_WEB=8099                          # sert le bouton de l'interface
+      - TZ=Europe/Paris
+    ports:
+      - "8099:8099"                            # doit être joignable par ton navigateur
+    volumes:
+      - ./data:/data                           # config.yml + dossier univers/
+    # Si Jellyfin tourne dans un autre docker-compose, décommente pour
+    # rejoindre son réseau et utiliser http://jellyfin:8096 :
+    # networks:
+    #   - jellyfin_default
+
+# networks:
+#   jellyfin_default:
+#     external: true
