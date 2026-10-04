@@ -237,6 +237,16 @@ def barre(p, n=20):
     return "▰" * plein + "▱" * (n - plein)
 
 
+def libelle_secondaire(etape):
+    """secondaire: true → « facultatif » ; secondaire: "Spin-off" → « Spin-off » ; sinon None."""
+    valeur = etape.get("secondaire", etape.get("facultatif"))
+    if valeur is True:
+        return "facultatif"
+    if isinstance(valeur, str) and valeur.strip() and valeur.strip().lower() not in ("false", "non", "no"):
+        return valeur.strip()
+    return None
+
+
 def traiter(jf, fichier, cfg, test=False, source="local"):
     data = yaml.safe_load(fichier.read_text(encoding="utf-8")) or {}
     nom = data.get("nom") or fichier.stem
@@ -259,23 +269,29 @@ def traiter(jf, fichier, cfg, test=False, source="local"):
         if parent_id and parent_id not in ids_collection:
             ids_collection.append(parent_id)
         ids_elements = [e["Id"] for e in elements]
-        info["etapes"].append({"titre": titre, "cible": parent_id, "elements": ids_elements})
+        secondaire = libelle_secondaire(etape)
+        info["etapes"].append({"titre": titre, "cible": parent_id, "elements": ids_elements,
+                               "secondaire": secondaire})
         if parent_id:
             info["membres"].add(parent_id)
-            premier_parent = premier_parent or parent_id
+            if not libelle_secondaire(etape):  # affiche auto : 1re étape principale trouvée
+                premier_parent = premier_parent or parent_id
         for e in elements:
             info["membres"].add(e["Id"])
             if e.get("SeasonId"):
                 info["membres"].add(e["SeasonId"])
         vus, total, en_cours = etat(elements)
         resultats.append({"titre": titre, "trouve": trouve, "vus": vus,
-                          "total": total, "en_cours": en_cours})
+                          "total": total, "en_cours": en_cours, "secondaire": secondaire})
 
-    # Statuts + prochaine étape
+    # Statuts + prochaine étape. Les étapes secondaires sont affichées mais ne
+    # comptent pas dans la progression principale et ne sont jamais « prochain ».
+    principales = [r for r in resultats if not r["secondaire"]]
+    bonus = [r for r in resultats if r["secondaire"]]
     prochain_marque = False
     lignes = []
-    total_vus = sum(r["vus"] for r in resultats)
-    total_all = sum(r["total"] for r in resultats)
+    total_vus = sum(r["vus"] for r in principales)
+    total_all = sum(r["total"] for r in principales)
     for i, r in enumerate(resultats, 1):
         if r["total"] == 0:
             icone, detail = "❓", "introuvable dans la bibliothèque"
@@ -285,13 +301,16 @@ def traiter(jf, fichier, cfg, test=False, source="local"):
             icone = "▶️" if (r["vus"] or r["en_cours"]) else "⬜"
             detail = f'{r["vus"]}/{r["total"]} épisodes' if r["total"] > 1 else (
                 "en cours" if r["en_cours"] else "à voir")
-            if not prochain_marque:
+            if not prochain_marque and not r["secondaire"]:
                 detail += "  👉 prochain"
                 prochain_marque = True
         if r["total"] > 1 and icone == "✅":
             detail = f'{r["total"]}/{r["total"]} épisodes'
-        lignes.append(f'{icone} {i}. {r["titre"]} — {detail}')
-        print(f'  {icone} {i}. {r["titre"]}  →  {r["trouve"] or "RIEN TROUVÉ"}  [{r["vus"]}/{r["total"]}]')
+        etiquette = f' [{r["secondaire"]}]' if r["secondaire"] else ""
+        if r["secondaire"]:
+            icone = {"✅": "☑️", "⬜": "◻️", "▶️": "▷"}.get(icone, icone)
+        lignes.append(f'{icone} {i}. {r["titre"]}{etiquette} — {detail}')
+        print(f'  {icone} {i}. {r["titre"]}{etiquette}  →  {r["trouve"] or "RIEN TROUVÉ"}  [{r["vus"]}/{r["total"]}]')
 
     pct = total_vus / total_all if total_all else 0
     entete = f"Progression : {total_vus}/{total_all} — {round(pct * 100)} %"
@@ -300,7 +319,11 @@ def traiter(jf, fichier, cfg, test=False, source="local"):
     blocs = []
     if data.get("description"):
         blocs.append(str(data["description"]).strip())
-    blocs += [entete, barre(pct), ""] + lignes
+    blocs += [entete, barre(pct)]
+    if bonus:
+        b_vus, b_tot = sum(r["vus"] for r in bonus), sum(r["total"] for r in bonus)
+        blocs.append(f"Secondaires (hors progression) : {b_vus}/{b_tot}")
+    blocs += [""] + lignes
 
     sep = "<br>" if cfg.get("description_html", True) else "\n"
     if sep == "<br>":

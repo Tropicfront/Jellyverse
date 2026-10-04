@@ -95,7 +95,7 @@
   }
 
   function calculer(u, infos) {
-    let vusTotal = 0, total = 0, prochain = null;
+    let vusTotal = 0, total = 0, prochain = null, bonusVus = 0, bonusTotal = 0;
     const etapes = u.etapes.map((e, index) => {
       let vus = 0, enCours = false, premier = null;
       e.elements.forEach((id) => {
@@ -106,15 +106,15 @@
         if (!premier) premier = { id, it, enCours: ud.PlaybackPositionTicks > 0, pct: ud.PlayedPercentage || 0 };
       });
       const n = e.elements.length;
-      vusTotal += vus; total += n;
+      if (e.secondaire) { bonusVus += vus; bonusTotal += n; } else { vusTotal += vus; total += n; }
       let statut = 'avoir';
       if (!n) statut = 'absent';
       else if (vus === n) statut = 'fait';
       else if (vus || enCours) statut = 'encours';
-      if (!prochain && n && vus < n) prochain = { index, etape: e, ...premier };
+      if (!prochain && !e.secondaire && n && vus < n) prochain = { index, etape: e, ...premier };
       return { ...e, index, vus, n, statut };
     });
-    return { etapes, vusTotal, total, prochain };
+    return { etapes, vusTotal, total, prochain, bonusVus, bonusTotal };
   }
 
   function libelleElement(it) {
@@ -182,6 +182,12 @@
   .jfu-pied{margin-top:16px;text-align:right}
   .jfu-lien{background:none;border:none;color:#00a4dc;cursor:pointer;font-size:.9em}
   .jfu-msg{color:#aaa;padding:10px 0}
+  .jfu-bonus{color:#aaa;font-size:.85em;margin-top:6px}
+  .jfu-etape.secondaire{background:transparent;border:1px dashed #444}
+  .jfu-etape.secondaire .jfu-t{color:#bbb}
+  .jfu-etape.secondaire .jfu-num{background:transparent;border:1px dashed #666}
+  .jfu-etiquette{display:inline-block;font-size:.72em;padding:1px 7px;margin-left:6px;border-radius:9px;
+    background:#3a3a3c;color:#ccc;vertical-align:middle;text-transform:lowercase}
   .jfu-parchemin .jfu-svg{width:2em;height:2em;display:block}
   .jfu-parchemin:hover .jfu-svg{transform:rotate(-6deg) scale(1.08);transition:transform .15s}
   .jfu-parchemin-flottant{position:fixed;right:20px;bottom:90px;z-index:9998;width:48px;height:48px;
@@ -257,7 +263,8 @@
     if (u.description) html += `<p class="jfu-desc">${esc(u.description)}</p>`;
     html += `<div class="jfu-global"><div class="jfu-chiffres"><span>Progression</span>
         <span>${p.vusTotal}/${p.total} · ${pct} %</span></div>
-        <div class="jfu-barre"><span style="width:${pct}%"></span></div></div>`;
+        <div class="jfu-barre"><span style="width:${pct}%"></span></div>
+        ${p.bonusTotal ? `<div class="jfu-bonus">Secondaires (hors progression) : ${p.bonusVus}/${p.bonusTotal}</div>` : ''}</div>`;
 
     if (p.prochain) {
       html += `<div class="jfu-prochain"><div class="jfu-txt">
@@ -277,9 +284,10 @@
         : e.n > 1 ? `${e.vus}/${e.n} épisodes`
         : e.statut === 'fait' ? 'vu' : e.statut === 'encours' ? 'en cours' : 'à voir';
       const suivante = p.prochain && p.prochain.index === e.index ? ' suivante' : '';
-      html += `<li class="jfu-etape ${e.statut}${suivante}" data-id="${esc(e.cible || '')}">
+      const sec = e.secondaire ? ' secondaire' : '';
+      html += `<li class="jfu-etape ${e.statut}${suivante}${sec}" data-id="${esc(e.cible || '')}">
           <div class="jfu-num">${icone}</div>
-          <div class="jfu-info"><div class="jfu-t">${esc(e.titre)}</div>
+          <div class="jfu-info"><div class="jfu-t">${esc(e.titre)}${e.secondaire ? ` <span class="jfu-etiquette">${esc(e.secondaire)}</span>` : ''}</div>
             ${e.n > 1 ? `<div class="jfu-barre"><span style="width:${ep}%"></span></div>` : ''}</div>
           <div class="jfu-compte">${compte}</div></li>`;
     });

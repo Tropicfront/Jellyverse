@@ -140,9 +140,10 @@ Chaque collection reçoit une **affiche** et un **fond**, par ordre de priorité
    ton image à toi, le nom est celui du fichier `.yml` (ex. `mushishi.jpg`) ;
 2. le bloc `affiche:` du `.yml` (`tmdb_collection`, `tmdb_serie`, `tmdb_film`,
    `url` ou `fichier`) ;
-3. **automatique** : l'affiche TMDB du premier film / série de l'univers,
-   grâce à l'identifiant TMDB déjà connu de Jellyfin ;
-4. sans clé TMDB : les images Jellyfin de ce premier film / série.
+3. **automatique** : l'affiche TMDB de la **première étape principale** de
+   l'univers, grâce à l'identifiant TMDB que Jellyfin connaît déjà pour ce
+   film ou cette série (Jellyverse ne cherche pas par le nom de l'univers) ;
+4. sans clé TMDB : les images Jellyfin de cette première étape.
 
 TMDB : crée une clé gratuite sur themoviedb.org (Paramètres → API) et mets-la
 dans `TMDB_API_KEY` (clé v3 ou jeton de lecture v4). Les affiches en français
@@ -232,6 +233,28 @@ Voir `univers/mushishi.yml` et `univers/_modele.yml.exemple`.
 | `id`       | `"4f2a…"`                        | identifiant exact (série, saison, épisode ou film) |
 | `titre`    | texte libre                      | ce qui s'affiche sur la fiche         |
 | `annee`    | `2015`                           | départage deux titres identiques      |
+| `inclure_speciaux` | `true`                   | série entière : inclut aussi la saison 0 |
+| `secondaire` | `true` ou `"Spin-off"`         | étape non prioritaire (voir ci-dessous) |
+
+Toutes les options, avec des exemples commentés, sont dans
+**`univers/_modele.yml.exemple`**.
+
+### Étapes secondaires
+
+Une étape marquée `secondaire` (spin-off, OVA bonus, film hors continuité…)
+reste dans la collection et dans la liste, avec une étiquette (« facultatif »
+ou le texte choisi) et un style atténué, mais :
+
+- elle ne compte **pas** dans la progression principale (affichée à part :
+  « Secondaires (hors progression) : 1/3 ») ;
+- elle n'est jamais proposée comme **prochain** élément à regarder ;
+- elle ne sert pas pour l'affiche automatique.
+
+```yaml
+  - titre: "Le spin-off"
+    serie: "Nom du spin-off"
+    secondaire: "Spin-off"
+```
 
 **Trouver un `id`** : ouvre l'élément dans Jellyfin, l'adresse contient
 `…details?id=XXXXXXXX`.

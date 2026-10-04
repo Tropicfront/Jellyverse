@@ -1,31 +1,14 @@
 # =============================================================
 #  UNIVERS : Mushishi
-# =============================================================
-# Chaque étape doit contenir UNE de ces clés pour être trouvée :
-#   serie: "Nom exact dans Jellyfin"   (+ saison / episodes optionnels)
-#   film:  "Nom exact dans Jellyfin"
-#   id:    "identifiant Jellyfin"      (le plus fiable, voir README)
-#
-# Options :
-#   titre:   texte affiché sur la fiche (libre)
-#   saison:  numéro de saison (0 = spéciaux / OVA)
-#   episodes: 3  |  [1, 4]  |  "1-10"  |  "1-10, 12"
-#   annee:   pour départager deux titres identiques
-#   inclure_speciaux: true   (si serie sans saison, inclut la saison 0)
-#
-# ⚠ Adapte les noms / saisons à la façon dont TA bibliothèque
-#   est organisée (regarde les noms exacts dans Jellyfin).
+#  Toutes les options sont expliquées dans _modele.yml.exemple
+#  ⚠ Les noms et saisons doivent correspondre à TA bibliothèque.
 # =============================================================
 
 nom: "Mushishi"
 description: "Ordre de visionnage complet de l'univers Mushishi."
 
-# Affiche de la collection (facultatif). Sans ce bloc, l'affiche TMDB du
-# premier film / série trouvé est utilisée automatiquement.
-# affiche:
-#   tmdb_serie: 12345          # ou tmdb_film / tmdb_collection (id TMDB)
-#   # url: "https://…/affiche.jpg"
-#   # fichier: "perso/mushishi.jpg"   (relatif à /affiches)
+# Pas de bloc « affiche: » : affiche TMDB automatique de la série Mushishi
+# (première étape principale).
 
 etapes:
   - titre: "Mushishi (Saison 1 — 26 épisodes)"

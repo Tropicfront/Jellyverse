@@ -1,23 +1,131 @@
-# Copie ce fichier en « mon_univers.yml » puis remplis-le.
-nom: "Nom de l'univers"
-description: "Petite phrase affichée en haut de la fiche (facultatif)"
+# =====================================================================
+#  JELLYVERSE — MODÈLE DE FICHIER D'UNIVERS (toutes les options)
+# =====================================================================
+#
+#  Utilisation : copie ce fichier, renomme-le en « mon_univers.yml »
+#  (sans le « _ » du début) et remplis-le.
+#
+#  ── Où le déposer ? ─────────────────────────────────────────────────
+#   • dossier univers/ du dépôt GitHub  → pour tout le monde
+#   • /mnt/docker/jellyverse/data/univers/ → pour toi seulement
+#  Un fichier local qui porte le même nom qu'un fichier GitHub le remplace.
+#
+#  ── Nom du fichier ──────────────────────────────────────────────────
+#   • Le nom du fichier (sans .yml) sert d'identifiant : « star-wars.yml »
+#     → identifiant « star-wars ». Il sert aussi pour l'affiche perso
+#     (voir plus bas). Évite de le changer une fois l'univers créé.
+#   • Un fichier qui commence par « _ » est ignoré (modèle, brouillon).
+#
+#  ── Règles d'écriture YAML ──────────────────────────────────────────
+#   • L'indentation se fait avec des ESPACES (jamais de tabulations).
+#   • Mets les textes entre guillemets s'ils contiennent « : » ou « # ».
+#   • Tout ce qui suit un « # » est un commentaire, ignoré par l'app.
+#
+#  ── Tester ──────────────────────────────────────────────────────────
+#     docker compose run --rm jellyverse --test
+#  affiche pour chaque étape ce qui a été trouvé (ou « RIEN TROUVÉ »).
+# =====================================================================
 
-# affiche:                      # facultatif, sinon automatique via TMDB
-#   tmdb_collection: 1241       # ex. une saga de films sur TMDB
+
+# ─── INFORMATIONS DE L'UNIVERS ───────────────────────────────────────
+
+# OBLIGATOIRE — nom de l'univers (titre de la collection et du panneau).
+nom: "Nom de l'univers"
+
+# Facultatif — phrase affichée en haut de la fiche et du panneau.
+description: "Ordre de visionnage conseillé de l'univers."
+
+# Facultatif — nom exact de la collection dans Jellyfin.
+# Par défaut : PREFIXE_COLLECTION (docker-compose) + nom.
+# collection: "Mon univers (ordre chronologique)"
+
+
+# ─── AFFICHE DE LA COLLECTION (facultatif) ───────────────────────────
+#
+# Sans ce bloc, l'affiche est AUTOMATIQUE : Jellyverse prend la PREMIÈRE
+# ÉTAPE PRINCIPALE trouvée ci-dessous, lit l'identifiant TMDB que Jellyfin
+# connaît déjà pour ce film / cette série, et télécharge son affiche et son
+# fond sur TMDB. Il ne cherche PAS par le nom de l'univers.
+#
+# Ordre de priorité :
+#   1. image perso : /mnt/docker/jellyverse/affiches/perso/<nom-du-fichier>.jpg
+#      (ou .png / .webp) — ex. « star-wars.jpg » pour « star-wars.yml »
+#   2. ce bloc « affiche: » (UNE seule des options ci-dessous)
+#   3. automatique via TMDB (voir ci-dessus)
+#   4. sans clé TMDB : images Jellyfin de la première étape principale
+#
+# affiche:
+#   tmdb_collection: 10       # saga de films TMDB : themoviedb.org/collection/10
+#   tmdb_serie: 1399          # série TMDB        : themoviedb.org/tv/1399
+#   tmdb_film: 11             # film TMDB         : themoviedb.org/movie/11
+#   url: "https://exemple.com/affiche.jpg"   # image sur internet
+#   fichier: "perso/mon-affiche.jpg"         # image dans /mnt/docker/jellyverse/affiches/
+
+
+# ─── ÉTAPES, DANS L'ORDRE DE VISIONNAGE ──────────────────────────────
+#
+# Chaque étape (ligne qui commence par « - ») doit contenir UNE de ces clés
+# pour retrouver l'élément dans Jellyfin :
+#
+#   serie: "Nom"   nom de la série TEL QU'AFFICHÉ dans Jellyfin
+#   film:  "Nom"   nom du film TEL QU'AFFICHÉ dans Jellyfin
+#   id:    "…"     identifiant Jellyfin : le plus fiable. Ouvre l'élément
+#                  dans Jellyfin, l'adresse contient « details?id=XXXX ».
+#                  Fonctionne pour une série, une saison, un épisode ou un film.
+#
+# Options possibles :
+#
+#   titre:  texte affiché sur la fiche et le panneau (libre).
+#           Par défaut : le nom du film / de la série.
+#   saison: numéro de saison (0 = « Spéciaux » / OVA). Sans saison, toute la
+#           série est prise, sauf les spéciaux.
+#   episodes: limite à certains épisodes de la saison :
+#             3            un seul épisode
+#             [1, 4, 7]    une liste
+#             "1-10"       une plage
+#             "1-10, 12"   plage + épisode
+#   inclure_speciaux: true   série sans « saison » : inclut aussi la saison 0.
+#   annee:  année de sortie, pour départager deux titres identiques.
+#   secondaire: étape NON PRIORITAIRE (spin-off, OVA bonus, film hors
+#           continuité…). Elle reste dans la collection et dans la liste,
+#           mais ne compte pas dans la progression, n'est jamais proposée
+#           comme « prochain », et ne sert pas pour l'affiche automatique.
+#             secondaire: true         étiquette « facultatif »
+#             secondaire: "Spin-off"   étiquette personnalisée
 
 etapes:
-  - titre: "Série — saison entière"
-    serie: "Nom de la série"
-    saison: 1
 
-  - titre: "Quelques épisodes seulement"
+  # Une série entière (toutes les saisons, sans les spéciaux)
+  - titre: "La série principale"
+    serie: "Nom de la série"
+
+  # Une seule saison
+  - titre: "La série — saison 2"
     serie: "Nom de la série"
     saison: 2
-    episodes: "1-6"
 
-  - titre: "Un film"
+  # Une partie de saison (ex. saison coupée en deux)
+  - titre: "Saison 3, partie 1"
+    serie: "Nom de la série"
+    saison: 3
+    episodes: "1-12"
+
+  # Un épisode spécial / OVA rangé dans « Spéciaux »
+  - titre: "OVA entre les deux parties"
+    serie: "Nom de la série"
+    saison: 0
+    episodes: 2
+
+  # Un film (avec l'année pour éviter une confusion avec un remake)
+  - titre: "Le film"
     film: "Nom du film"
     annee: 2015
 
-  - titre: "Élément trouvé par son identifiant"
-    id: "a1b2c3d4e5f6..."
+  # Une étape secondaire (non prioritaire)
+  - titre: "Le spin-off"
+    serie: "Nom du spin-off"
+    secondaire: "Spin-off"
+
+  # Un élément retrouvé par son identifiant Jellyfin
+  - titre: "Film introuvable par son nom"
+    id: "a1b2c3d4e5f60718293a4b5c6d7e8f90"
