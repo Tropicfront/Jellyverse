@@ -1,0 +1,44 @@
+nom: "Code Geass"
+description: "Ordre de visionnage complet de l'univers Code Geass."
+
+etapes:
+  - titre: "Code Geass: Lelouch of the Rebellion (Saison 1 — 25 épisodes)"
+    serie: "Code Geass: Lelouch of the Rebellion"
+    saison: 1
+
+  - titre: "Code Geass: Lelouch of the Rebellion (Saison 2 — 25 épisodes)"
+    serie: "Code Geass: Lelouch of the Rebellion"
+    saison: 2
+
+  - titre: "Code Geass: Akito the Exiled 1 - L'Avènement de la Wyverne (OAV)"
+    film: "Code Geass: Akito the Exiled 1 - L'Avènement de la Wyverne"
+
+  - titre: "Code Geass: Akito the Exiled 2 - La Wyverne déchiquetée (OAV)"
+    film: "Code Geass: Akito the Exiled 2 - La Wyverne déchiquetée"
+
+  - titre: "Code Geass: Akito the Exiled 3 - Ce qui brille tombe du ciel (OAV)"
+    film: "Code Geass: Akito the Exiled 3 - Ce qui brille tombe du ciel"
+
+  - titre: "Code Geass: Akito the Exiled 4 - Souvenirs de haine (OAV)"
+    film: "Code Geass: Akito the Exiled 4 - Souvenirs de haine"
+
+  - titre: "Code Geass: Akito the Exiled 5 - Aux êtres aimés (OAV)"
+    film: "Code Geass: Akito the Exiled 5 - Aux êtres aimés"
+
+  - titre: "Code Geass: Lelouch of the Rebellion - Initiation"
+    film: "Code Geass: Lelouch of the Rebellion - Initiation"
+    secondaire: "Univers Alternatif"
+
+  - titre: "Code Geass: Lelouch of the Rebellion - Glorification"
+    film: "Code Geass: Lelouch of the Rebellion - Glorification"
+    secondaire: "Univers Alternatif"
+
+  - titre: "Code Geass: Lelouch of the Re;surrection"
+    film: "Code Geass: Lelouch of the Re;surrection"
+    secondaire: "Univers Alternatif"
+
+  - titre: "CODE GEASS Rozé of the Recapture (Saison 1 — 12 épisodes)"
+    serie: "CODE GEASS Rozé of the Recapture"
+    saison: 1
+    secondaire: "Univers Alternatif"
+

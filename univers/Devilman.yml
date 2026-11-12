@@ -1,0 +1,15 @@
+nom: "Devilman"
+description: "Ordre de visionnage complet de l'univers Devilman."
+
+etapes:
+  - titre: "Devilman Crybaby (Saison 1 — 10 épisodes)"
+    serie: "Devilman Crybaby"
+    saison: 1
+
+  - titre: "Devilman : La Naissance (1987)"
+    film: "Devilman : La Naissance (1987)"
+    secondaire: "Univers Alternatif"
+
+  - titre: "Devilman : La Naissance (1987)"
+    film: "Devilman : La Naissance (1987)"
+    secondaire: "Univers Alternatif"

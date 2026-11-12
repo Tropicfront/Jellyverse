@@ -1,14 +1,5 @@
-# =============================================================
-#  UNIVERS : Mushishi
-#  Toutes les options sont expliquées dans _modele.yml.exemple
-#  ⚠ Les noms et saisons doivent correspondre à TA bibliothèque.
-# =============================================================
-
 nom: "Mushishi"
 description: "Ordre de visionnage complet de l'univers Mushishi."
-
-# Pas de bloc « affiche: » : affiche TMDB automatique de la série Mushishi
-# (première étape principale).
 
 etapes:
   - titre: "Mushishi (Saison 1 — 26 épisodes)"

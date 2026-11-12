@@ -1,0 +1,33 @@
+nom: "Psycho-Pass"
+description: "Ordre de visionnage complet de l'univers Psycho-Pass."
+
+etapes:
+  - titre: "Psycho-Pass (Saison 1 — 22 épisodes)"
+    serie: "Psycho-Pass"
+    saison: 1
+
+  - titre: "Psycho-Pass (Saison 2 — 11 épisodes)"
+    serie: "Psycho-Pass"
+    saison: 2
+
+  - titre: "Psycho-Pass : Le Film"
+    film: "Psycho-Pass : Le Film"
+
+  - titre: "Psycho-Pass : Sinners of the System - Case 1 - Crime et Châtiment"
+    film: "Psycho-Pass : Sinners of the System - Case 1 - Crime et Châtiment"
+
+  - titre: "Psycho-Pass : Sinners of the System - Case 2 - Le Premier Gardien"
+    film: "Psycho-Pass : Sinners of the System - Case 2 - Le Premier Gardien"
+
+  - titre: "Psycho-Pass : Sinners of the System - Case 3 - Par-delà l’amour et la haine"
+    film: "Psycho-Pass : Sinners of the System - Case 3 - Par-delà l’amour et la haine"
+
+  - titre: "Psycho-Pass (Saison 3 — 8 épisodes)"
+    serie: "Psycho-Pass"
+    saison: 3
+
+  - titre: "Psycho-Pass 3 : First Inspector"
+    film: "Psycho-Pass 3 : First Inspector"
+
+  - titre: "Psycho-Pass : Providence"
+    film: "Psycho-Pass : Providence"

@@ -1,0 +1,29 @@
+nom: "Steins;Gate"
+description: "Ordre de visionnage complet de l'univers Steins;Gate."
+
+etapes:
+  - titre: "Steins;Gate (Saison 1 — 24 épisodes)"
+    serie: "Steins;Gate"
+    saison: 1
+
+  - titre: "Poriomanie égoïste (OVA)"
+    serie: "Steins;Gate"
+    saison: 0
+    episodes: 1
+
+  - titre: "Steins;Gate Le Film - Déjà Vu in the Load Area"
+    film: "Steins;Gate Le Film - Déjà Vu in the Load Area"
+
+  - titre: "Episode 23(β) - Ouvrir le lien manquant (OVA)"
+    serie: "Steins;Gate"
+    saison: 0
+    episodes: 6
+
+  - titre: "Steins;Gate 0 (Saison 1 — 23 épisodes)"
+    serie: "Steins;Gate 0"
+    saison: 1
+
+  - titre: "Intermède Aigre-doux (OVA)"
+    serie: "Steins;Gate 0"
+    saison: 0
+    episodes: 1
