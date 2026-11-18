@@ -2,23 +2,23 @@ nom: "City Hunter"
 description: "Ordre de visionnage complet de l'univers City Hunter."
 
 etapes:
-  - titre: "City Hunter (Saison 1 — 51 épisodes)"
-    serie: "City Hunter"
+  - titre: "Nicky Larson (Saison 1 — 51 épisodes)"
+    serie: "Nicky Larson"
     saison: 1
 
-  - titre: "City Hunter (Saison 2 — 63 épisodes)"
-    serie: "City Hunter"
+  - titre: "Nicky Larson (Saison 2 — 63 épisodes)"
+    serie: "Nicky Larson"
     saison: 2
 
   - titre: "City Hunter: Amour, Destin et un Magnum 357"
     film: "City Hunter: Amour, Destin et un Magnum 357"
 
-  - titre: "City Hunter (Saison 3 — 13 épisodes)"
-    serie: "City Hunter"
+  - titre: "Nicky Larson (Saison 3 — 13 épisodes)"
+    serie: "Nicky Larson"
     saison: 3
 
-  - titre: "City Hunter (Saison 4 — 13 épisodes)"
-    serie: "City Hunter"
+  - titre: "Nicky Larson (Saison 4 — 13 épisodes)"
+    serie: "Nicky Larson"
     saison: 4
 
   - titre: "City Hunter: Bay City Wars"
@@ -33,8 +33,8 @@ etapes:
   - titre: "City Hunter: Goodbye My Sweetheart"
     film: "City Hunter: Goodbye My Sweetheart"
 
-  - titre: "City Hunter: La Mort de City Hunter"
-    film: "City Hunter: La Mort de City Hunter"
+  - titre: "Nicky Larson, City Hunter: La Mort de Ryo Saeba"
+    film: "Nicky Larson, City Hunter : La Mort de Ryo Saeba"
 
   - titre: "Nicky Larson: Private Eyes"
     film: "Nicky Larson: Private Eyes"
@@ -43,6 +43,6 @@ etapes:
     film: "Nicky Larson: Angel Dust"
 
   - titre: "Nicky Larson: Angel Heart"
-    serie: "Nicky Larson: Angel Heart"
+    serie: "Angel Heart"
     saison: 1
     secondaire: "Univers Alternatif"

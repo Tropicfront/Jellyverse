@@ -1,0 +1,28 @@
+nom: "Albator"
+description: "Ordre de visionnage complet de l'univers Albator."
+
+etapes:
+  - titre: "Albator 84 : L'Atlantis de ma jeunesse"
+    film: "Albator 84 : L'Atlantis de ma jeunesse"
+
+  - titre: "Albator 84 (Saison 1 — 22 épisodes)"
+    serie: "Albator 84"
+    saison: 1
+
+  - titre: "Albator, le corsaire de l'espace(Saison 1 — 42 épisodes)"
+    serie: "Albator"
+    saison: 1
+
+  - titre: "Albator : L'Odyssée Sans Fin (Saison 1 — 13 épisodes OAV)"
+    serie: "Albator : L'Odyssée Sans Fin"
+    saison: 1
+
+  - titre: "Harlock Saga (Saison 1 - 6 épisodes)"
+    serie: "Albator : L'Anneau des Nibelunghen"
+    saison: 1
+    secondaire: "Emeraldas past"
+
+  - titre: "Queen Emeraldas (Saison 1 - 4 épisodes OAV)"
+    serie: "Queen Emeraldas"
+    saison: 1
+    secondaire: "Relecture / Univers Alternatif"
